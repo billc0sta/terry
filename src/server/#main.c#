@@ -1,27 +1,20 @@
 #include <string.h>
 #include <stdio.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
+#include "../utils/utils.h"
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include <stdlib.h>
 #include <errno.h>
-#define true 1
-#define false 0 
+#include <stdbool.h>
+
 const int port = 12223;
 const int buffer_size = 26400;
 const char* IP = "192.168.1.13";
 
-void write_error(char* message, char do_exit) {
-  printf("[error]: %s, errno: %s", message, strerror(errno));
-  if (do_exit) {
-    exit(1);
-  }
-}
-
-
 struct server {
-  int socket;
   struct sockaddr_in address;
+  int socket;
 };
 
 void start_server(struct server* server_info) {
