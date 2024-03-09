@@ -30,9 +30,19 @@ void init_server() {
   server_addr.sin_addr.s_addr = inet_addr(IP);
 }
 
-int upload_file(FILE* file, const char* file_name, char* buffer) {
+int download_file(const char* filehash) {
+  
+}
+
+int upload_file(const char* file_name, char* buffer) {
   if (strlen(file_name) >= name_max_length) {
     write_error("name length too long", 0);
+    return -1;
+  }
+  FILE* file = fopen(file_name, "r");
+  if (file == NULL) {
+    write_error("couldn't open file", 0);
+    return -1;
   }
   int client_socket = make_connected_socket();
   if (send(client_socket, "upload_file_request", strlen("upload_file_request") + 1, 0) == -1) {
@@ -65,5 +75,6 @@ int upload_file(FILE* file, const char* file_name, char* buffer) {
 int main() {
   init_server();
   unsigned char* buffer = malloc(sizeof(char) * buffer_size);
+  upload_file("exfile");
   return 0;
 }
