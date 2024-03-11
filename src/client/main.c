@@ -16,62 +16,53 @@ struct sockaddr_in server_addr;
 
 int make_connected_socket() {
   int csocket = socket(AF_INET, SOCK_STREAM, 0);
-  if (csocket == -1) {
-    write_error("couldn't create_socket", 1);
+  int ires = 0;
+  if (!write_state(csocket != -1, "socket created", "socket creation failed")) {
+    return -1;
   }
-  if (connect(csocket, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
-    write_error("connection to server failed", 0);
+  ires = connect(csocket, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0;
+  if (!write_state(csocket != -1, "socket connected", "connection to server failed")) {
     csocket = -1;
   }
   return csocket;
 }
 
 
-void init_server() {
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(PORT);
-  server_addr.sin_addr.s_addr = inet_addr(IP);
-}
-
-
 int send_request(int rq, int client_socket) {
+  int ires = 0;
   char request_str[50] = {'\0'};
   switch(rq) {
   case REQUEST_UPLOAD: strcpy(request_str, "upload_file_request"); break;
   case REQUEST_DOWNLOAD: strcpy(request_str, "download_file_request"); break;
-  default: write_error("unimplemented request", 1);
+  default: printf("request token not implemented\n"); return 0;
   }
-  if(send(client_socket, request_str, strlen(request_str) + 1, 0) == -1) {
-    write_error("send_failed", 0);
-    return 0;
-  }
-  return 1;
+
+  ires = send(client_socket, request_str, strlen(request_str) + 1, 0);
+  return write_state(ires != -1, "request sent", "request sending failed");
 }
 
 
-void upload_file(char* file_src, unsigned char* buffer) {
+void upload(char* file_src, unsigned char* buffer) {
   int csocket = make_connected_socket();
   FILE* file = fopen(file_src, "r"); 
   char* file_name = get_file_name(file_src);
   int ires = 0;
   if (csocket == -1) {
-    write_error("socket creation failed", 0);
+    goto cleanup; // sorry.
+  }
+  if (!write_state(file != NULL, "file opened", "file open failed")) {
     goto cleanup;
-  } printf("socket created\n");
-  if (file == NULL) {
-    write_error("file open failed", 0);
-    goto cleanup;
-  } printf("file opened: %s\n", file_name);
+  }
   if (send_request(REQUEST_UPLOAD, csocket) == 0) {
     goto cleanup;
-  } printf("upload request sent\n");
+  }
   // send name first
   ires = send(csocket, file_name, strlen(file_name) + 1, 0);
-  if (ires == -1) {
-    write_error("send failed", 0);
+  if (!write_state(ires != -1, "name sent", "name sending failed")) {
     goto cleanup;
   }
 
+  // now send file
   send_file(csocket, file, buffer);
  cleanup:
   close(csocket);
@@ -80,11 +71,70 @@ void upload_file(char* file_src, unsigned char* buffer) {
 }
 
 
-int main() {
-  init_server();
-  unsigned char* buffer = malloc(sizeof(int) * BUFFER_SIZE);
-  upload_file("example.txt", buffer);
+int file_exists(const char* file_name) {
+  return fopen(file_name, "r") != NULL;
+}
 
+int ask_overwrite() {
+  char answer[3];
+  printf("this file exists, do you want to overwrite it? [yes] or [no]:");
+  while(1) {
+    scanf("%s", answer);
+    if (strcmp(answer, "yes") == 0) {
+      return 1;
+    }
+    else if (strcmp(answer, "no") == 0) {
+      return 0;
+      break;
+    }
+    else {
+      printf("(please answer with [yes] or [no])\n");
+    }
+  }
+}
+
+void download(const char* file_hash, unsigned char* buffer) {
+  int ires = 0;
+  int csocket = make_connected_socket();
+  char file_name[NAME_MAXLEN] = {'\0'};
+  if(csocket == -1) {
+    return;
+  }
+  ires = send(csocket, file_hash, strlen(file_hash) + 1, 0);
+  if(!write_state(ires != -1, "hash sent", "send hash failed")) {
+    goto cleanup;
+  }
+  ires = recv(csocket, buffer, BUFFER_SIZE, 0);
+  if(!write_state(ires != -1, "name recieved", "recv name failed")) {
+    goto cleanup;
+  }
+  strcpy(file_name, buffer);
+  // shouldn't happen, but just in case
+  if(strlen(file_name) >= NAME_MAXLEN) {
+    printf("name length higher than max\n");
+    goto cleanup;
+  }
+  printf("file name: %s\n", file_name);
+  if(file_exists(file_name) && !ask_overwrite()) {
+    goto cleanup;
+  }
+  else {
+    FILE* write_file = fopen(file_name, "w");
+    recieve_file(csocket, write_file, buffer);
+    fclose(write_file);
+  }
+ cleanup:
+  close(csocket);
+}
+
+
+int main() {
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(PORT);
+  server_addr.sin_addr.s_addr = inet_addr(IP);
+  unsigned char* buffer = malloc(sizeof(int) * BUFFER_SIZE);
+
+  
   free(buffer);
   return 0;
 }

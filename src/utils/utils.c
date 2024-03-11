@@ -4,13 +4,14 @@
 #include <stdio.h>
 #include <string.h>
 
-void write_error(const char* message, int close){
-  fprintf(stderr, "[error]: %s, errno: %s\n", message, strerror(errno));
-  if (close) {
-    exit(1);
-  }
-}
 
+int write_state(int success, const char* on_success, const char* on_failure) {
+  const char* state = (success) ? "error" : "success";
+  const char* message = (success) ? on_success : on_failure;
+  const char* info = (success) ? strerror(errno) : "no info";
+  fprintf(stderr, "[%s]: message: %s, info: %s\n", state, message, info);
+  return success;
+}
 
 char* get_file_name(const char* file_src) {
   char* file_name = malloc(sizeof(char) * (NAME_MAXLEN + 1));
@@ -25,11 +26,4 @@ char* get_file_name(const char* file_src) {
     ;
   file_name[count + 1] = '\0';
   return file_name;
-}
-
-
-void int_in_charr(char* arr, int put, int index) {
-  for (int byte = 0; byte < 4; ++byte) {
-    arr[index++] = *((char*)&put + byte);
-  }
 }
