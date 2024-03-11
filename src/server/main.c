@@ -1,4 +1,5 @@
 #include "../utils/utils.h"
+#include "../transfer/transfer.h"
 #include <string.h>
 #include <stdio.h>
 #include <arpa/inet.h>
@@ -33,27 +34,8 @@ void start_server(struct server* server_info) {
 }
 
 
-void recieve_file(int csocket, FILE* write_file, char* buffer) {
-  int bytes_recieved = 0;
-  while((bytes_recieved = recv(csocket, buffer, BUFFER_SIZE, 0)) != 0) {
-    if (bytes_recieved == -1) {
-      write_error("recv failed", 0);
-      return;
-    } printf("just recieved bytes: %d\n", bytes_recieved / 4);
 
-    for (int i = 0; i < bytes_recieved; i += 4) {
-      int byte = 0;
-      for (int b = 0; b < 4; b++) {
-	*((unsigned char*)&byte + b) = buffer[b+i];
-      }
-      fputc(byte, write_file);
-    }
-  }
-  printf("file recieved\n");
-}
-
-
-void upload_request(int csocket, char* buffer) {
+void upload_request(int csocket, unsigned char* buffer) {
   int ires = 0;
   char* file_name = malloc(NAME_MAXLEN);
   ires = recv(csocket, buffer, BUFFER_SIZE, 0);
@@ -79,12 +61,12 @@ void upload_request(int csocket, char* buffer) {
 }
 
 
-void download_request(int client_socket, char* buffer) {
+void download_request(int client_socket, unsigned char* buffer) {
   
 }
 
 
-void handle_connections(struct server* server_info, char* buffer) {
+void handle_connections(struct server* server_info, unsigned char* buffer) {
   while(1) {
     int client_socket = accept(server_info->socket, NULL, NULL);
     if (client_socket == -1) {
@@ -112,7 +94,7 @@ void handle_connections(struct server* server_info, char* buffer) {
 int main() {
   struct server server_info;
   start_server(&server_info);
-  char* buffer = malloc(sizeof(int) * BUFFER_SIZE);
+  unsigned char* buffer = malloc(sizeof(int) * BUFFER_SIZE);
 
   handle_connections(&server_info, buffer);
   return 0;
