@@ -62,11 +62,18 @@ void upload_file(int csockfd, const char *file_name, struct Buffer *buff) {
   int ires = 0;
   FILE *file = fopen(file_name, "r");
   if (!write_state(file != 0, "file opened", "file opening failed")) {
-    fclose(file);
     return;
   }
-  send_file(csockfd, file, buff);  
+  send_file(csockfd, file, buff);
   fclose(file);
+  ires = recv(csockfd, buff->text_buff, TEXT_BUFFLEN, 0);
+  if (!write_state(strcmp(buff->text_buff, "upload failed") != 0,
+                   "file uploaded", "upload_failed")) {
+    return;
+  }
+  
+  fd = deserialize(buff->text_buff);
+  printf("HASH: %s | use it to download the file\n", fd.hash);
 }
 
 int send_file(int csockfd, FILE *file, struct Buffer *buff) {

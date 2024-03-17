@@ -117,5 +117,3 @@ int save_metadata(const char *path, struct FileData *fd) {
   free(ser);
   return success;
 }
-
-// TODO: MAKE A SAFE SSCANF()
