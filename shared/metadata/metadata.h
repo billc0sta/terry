@@ -26,4 +26,5 @@ char *serialize(struct FileData *fd);
 struct Date get_current_time();
 struct FileData deserialize(const char *fd);
 int fast_test();
-int save_metadata(const char* path, struct FileData *fd);
+int save_metadata(const char *path, struct FileData *fd);
+int open_metadata(const char *file_path, struct FileData *fd);

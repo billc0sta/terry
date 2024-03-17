@@ -116,6 +116,17 @@ int save_metadata(const char *path, struct FileData *fd) {
   fclose(write_file);
   free(ser);
   return success;
-}
+ }
 
-// TODO: MAKE A SAFE SSCANF()
+int open_metadata(const char *file_path, struct FileData *fd) {   
+  FILE *file = fopen(file_path, "r");
+  if (file == 0)
+    return -1;
+  char raw[FD_SERIALIZE_LEN];
+  int byte = 0;
+  for (int i = 0; i < FD_SERIALIZE_LEN && (byte = fgetc(file)) != EOF; ++i) {
+    raw[i] = byte;
+  }
+  *fd = deserialize(raw);
+  return 0;
+}

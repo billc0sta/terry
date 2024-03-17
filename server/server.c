@@ -1,9 +1,11 @@
 #include "../shared/utils/utils.h"
 #include "../shared/metadata/metadata.h"
+#include <errno.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 #include <time.h>
 #include <unistd.h>
 #include <netinet/in.h>
@@ -26,8 +28,7 @@ int send_reqdeny(int csockfd, const char *reason);
 void upload_request(int csockfd, struct Buffer *buff);
 void download_request(int csockfd, struct Buffer *buff);
 int make_folder(const char *hash);
-int send_metadata(int csockfd, struct FileData *fd);
-int send_message(int csockfd, const char *message);
+
 char *get_base64();
 
 int main() {
@@ -42,21 +43,6 @@ int main() {
   free(buff.file_buff);
   
   return 0;
-}
-
-int send_message(int csockfd, const char* message) {
-  return send(csockfd, message, strlen(message), 0);
-}
-
-int send_metadata(int csockfd, struct FileData *fd) {
-  int ires = 0;
-  char *ser = serialize(fd);
-  ires = send(csockfd, ser, strlen(ser) + 1, 0);
-  free(ser);
-  if (!write_state(ires != -1, "sent metadata", "sending metadata failed")) {
-    return 0;
-  }
-  return 1;
 }
 
 int make_folder(const char *hash) {
@@ -78,30 +64,45 @@ char *gen_base64() {
 }
 
 void download_request(int csockfd, struct Buffer *buff) {
+  int ires = 0;
+  ires = recv(csockfd, buff->text_buff, TEXT_BUFFLEN, 0);
+  if (!write_state(ires != -1, "recieved file hash",
+                   "recieving file hash failed")) {
+    return;
+  }
+  int path_len = 350;
+  char path[path_len];
+  char hash[HASH_LEN];
+  strncpy(hash, buff->text_buff, HASH_LEN);
+  snprintf(path, path_len, "%s%s/", STORAGE_DIR, hash);
   
+  DIR *dir = opendir(path);
+  if (!write_state(errno != ENOENT, "file found", "no such file")) {
+    send_message(csockfd, "no such file");
+    return;
+  } else {
+    send_message(csockfd, "file found");
+  }
+  strcat(path, "metadata.txt");
+  struct FileData fd;
+  open_metadata(path, &fd);
+  FILE *file = fopen(path, "r");
+  if (file == 0) {
+    return;
+  }
+  ires = send_metadata(csockfd, &fd);
+  if (!write_state(ires == 1, "sent file metadata",
+                   "sending file metadata failed")) {
+    return; 
+  }
+  snprintf(path, path_len, "%s%s/%s", STORAGE_DIR, hash, fd.name);
+  ires = send_file(csockfd, file, buff);
+  fclose(file);
+  write_state(ires == 0, "sent file", "sending file failed");
+
+  // TODO: update metadata time last used
 }
 
-int recieve_file(int csockfd, FILE *write_file, struct Buffer *buff) {
-  int ires = 0;
-  int EOF_reached = 0;
-  int total_size = 0;
-  while (!EOF_reached) {
-    ires = recv(csockfd, buff->file_buff, sizeof(int) * FILE_BUFFLEN, 0);
-    if (!write_state(ires != -1, "recieved file chunk",
-		     "recieving file chunk failed")) {
-      return 0;
-    }
-    for (int i = 0; i < ires; ++i, ++total_size) {
-      if (buff->file_buff[i] == EOF) {
-        EOF_reached = 1;
-        break;
-      }
-      fputc(buff->file_buff[i], write_file);
-    }
-  }
-  write_state(1, "file recieved", "");
-  return total_size;
-}
 
 // this function is fucking gigantic, idk what to do
 void upload_request(int csockfd, struct Buffer *buff) {
@@ -185,6 +186,8 @@ void run_server(struct Server *server, struct Buffer *buff) {
     } else {
       send_reqdeny(csockfd, "no_such_request");
     }
+
+    shutdown(csockfd, SHUT_RDWR);
   }
 }
 
