@@ -1,3 +1,5 @@
+#ifndef METADATA
+#define METADATA
 #define FD_SERIALIZE_LEN 500
 #define NAME_LEN 255
 #define HASH_LEN 15
@@ -28,3 +30,4 @@ struct FileData deserialize(const char *fd);
 int fast_test();
 int save_metadata(const char *path, struct FileData *fd);
 int open_metadata(const char *file_path, struct FileData *fd);
+#endif 

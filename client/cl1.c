@@ -1,14 +1,6 @@
-#include "../shared/metadata/metadata.h"
-#include "../shared/utils/utils.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
+et.h>
 #include <unistd.h>
-#define PORT 20121
+#define PORT 20024
 #define IP "192.168.1.6"
 
 int make_connected_socket(struct sockaddr_in *server);
@@ -56,33 +48,33 @@ void download_file(int csockfd, const char *file_hash, struct Buffer *buff) {
     return;
   }
 
-  // receive response
+  // recieve response
   ires = recv(csockfd, buff->text_buff, TEXT_BUFFLEN, 0);
   if (ires == -1)
-    write_state(0, "", "receiving response failed");
+    write_state(0, "", "recieving response failed");
   if (!write_state(strcmp(buff->text_buff, "file found") == 0, "file found",
                    "no such file")) {
     return;
   }
 
-  // receive metadata
+  // recieve metadata
   ires = recv(csockfd, buff->text_buff, TEXT_BUFFLEN, 0);
-  if (!write_state(ires != -1, "received metadata",
-                   "receiving metadata failed")) {
+  if (!write_state(ires != -1, "recieved metadata",
+                   "recieving metadata failed")) {
     return;
   }
   printf("raw: %s\n, bytes recieved: %d\n", buff->text_buff, ires);
   struct FileData fd = deserialize(buff->text_buff);
   printf("write_file name: %s\n", fd.name);
 
-  // receive file
+  // recieve file
   FILE *write_file = fopen(fd.name, "w");
   if (write_file == 0) {
     write_state(0, "", "opening write file failed");
     return;
   }
   ires = receive_file(csockfd, write_file, fd.size, buff);
-  printf("bytes received: %d\n", ires);
+  printf("bytes recieved: %d\n", ires);
   fclose(write_file);
 }
 
@@ -139,3 +131,11 @@ int make_connected_socket(struct sockaddr_in *server) {
   }
   return sockfd;
 }
+ÿcket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#define PORT 20024
+#define IP "192.168.1.6"
+
+int make_connected_socket(struct sockaddr_in *server);
+int send_request(int csockfd, const char* request, struct Buffer *b

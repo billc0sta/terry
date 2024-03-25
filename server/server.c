@@ -11,7 +11,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#define PORT 20024
+#define PORT 20121
 #define STORAGE_DIR "../storage/"
 
 const char *base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -28,7 +28,7 @@ int send_reqdeny(int csockfd, const char *reason);
 void upload_request(int csockfd, struct Buffer *buff);
 void download_request(int csockfd, struct Buffer *buff);
 int make_folder(const char *hash);
-
+int update_usage_date(const char *metadata_dir);
 char *get_base64();
 
 int main() {
@@ -43,6 +43,21 @@ int main() {
   free(buff.file_buff);
   
   return 0;
+}
+
+int update_usage_date(const char *metadata_dir) {
+  FILE *file = fopen(metadata_dir, "r");
+  char raw[FD_SERIALIZE_LEN];
+  int i = 0;
+  for (int byte = 0; i < FD_SERIALIZE_LEN; ++i) {
+    if ((byte = fgetc(file)) == EOF)
+      break;
+    raw[i] = byte;
+  }
+  raw[i + 1] = '\0';
+  struct FileData fd = deserialize(raw);
+  fd.last_used = get_current_time();
+  save_metadata(metadata_dir, &fd);  
 }
 
 int make_folder(const char *hash) {
@@ -65,17 +80,19 @@ char *gen_base64() {
 
 void download_request(int csockfd, struct Buffer *buff) {
   int ires = 0;
+  // recieve file hash
   ires = recv(csockfd, buff->text_buff, TEXT_BUFFLEN, 0);
   if (!write_state(ires != -1, "recieved file hash",
                    "recieving file hash failed")) {
     return;
   }
+
+  // check if hash is an existing file
   int path_len = 350;
   char path[path_len];
   char hash[HASH_LEN];
   strncpy(hash, buff->text_buff, HASH_LEN);
   snprintf(path, path_len, "%s%s/", STORAGE_DIR, hash);
-  
   DIR *dir = opendir(path);
   if (!write_state(errno != ENOENT, "file found", "no such file")) {
     send_message(csockfd, "no such file");
@@ -83,24 +100,27 @@ void download_request(int csockfd, struct Buffer *buff) {
   } else {
     send_message(csockfd, "file found");
   }
+
+  // get and send metadata
   strcat(path, "metadata.txt");
   struct FileData fd;
   open_metadata(path, &fd);
-  FILE *file = fopen(path, "r");
-  if (file == 0) {
+  update_usage_date(path);
+  ires = send_metadata(csockfd, &fd);
+  if (ires != 1) {
     return;
   }
-  ires = send_metadata(csockfd, &fd);
-  if (!write_state(ires == 1, "sent file metadata",
-                   "sending file metadata failed")) {
-    return; 
-  }
+
+  // open and send file
   snprintf(path, path_len, "%s%s/%s", STORAGE_DIR, hash, fd.name);
+  printf("path: %s\n", path);
+  FILE* file = fopen(path, "r");
   ires = send_file(csockfd, file, buff);
   fclose(file);
-  write_state(ires == 0, "sent file", "sending file failed");
-
-  // TODO: update metadata time last used
+  if (ires == 0) {
+    write_state(0, "", "sending file failed");
+  }
+  printf("bytes send: %d\n", ires);
 }
 
 
@@ -128,7 +148,7 @@ void upload_request(int csockfd, struct Buffer *buff) {
                    "opening writing file failed")) {
     return;
   }
-  ires = recieve_file(csockfd, write_file, buff);
+  ires = receive_file(csockfd, write_file, fd.size, buff);
   fclose(write_file);
   if (ires == 0) {
     send_message(csockfd, "upload failed");
@@ -180,9 +200,9 @@ void run_server(struct Server *server, struct Buffer *buff) {
     if (strcmp(buff->text_buff, RQ_UPLOAD) == 0) {
       send_reqaccept(csockfd);
       upload_request(csockfd, buff);
-    } else if (strcmp(buff->text_buff, RQ_DOWNLOAD)) {
+    } else if (strcmp(buff->text_buff, RQ_DOWNLOAD) == 0) {
       send_reqaccept(csockfd);
-      // TODO: MAKE download_req();
+      download_request(csockfd, buff);
     } else {
       send_reqdeny(csockfd, "no_such_request");
     }
